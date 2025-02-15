@@ -11,15 +11,15 @@ It provides quick and intuitive functions (currently only one function) for visu
 
 ## Installation
 ```
-pip install vizdat
+pip install VizDat
 ```
 
 ## Usage
 ```
-import vizdat
+import VizDat
 
 #Currently, this is the only function available.
-vizdat.data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=False, color='skyblue', kde_color='crimson', kde=False)
+VizDat.data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=False, color='skyblue', kde_color='crimson', kde=False)
 ```
 
 What this function does:
