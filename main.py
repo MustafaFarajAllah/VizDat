@@ -1,14 +1,22 @@
 #necessary importations
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
 import numpy as np
 
+#----------------------------------------------
+
+
+
+#---------------Helper functions---------------
+
+#No. 1
 def validate_data(data):
     """
     The function `validate_data` will ensure that the data is a dataframe.
 
-    No return...
+    No return
     """
     if data is None:
         err = "The `data` parameter cannot be None. Please provide a valid DataFrame."
@@ -20,8 +28,7 @@ def validate_data(data):
     elif not isinstance(data, pd.DataFrame):
         raise TypeError("The `data` parameter must be a DataFrame.")
 
-#---------------------
-
+#No. 2
 def excluded_features(data, include, exclude, exclude_binary):
     """
     Identifies numerical features with optional inclusions, exclusions, and binary feature exclusion.
@@ -38,25 +45,31 @@ def excluded_features(data, include, exclude, exclude_binary):
     Raises:
         ValueError: For invalid parameter types or non-existent features.
     """
-    
+
+    # A function to determine if the feature is numerical
     def is_numerical(series):
         """Check if a series is numerical."""
         return pd.api.types.is_numeric_dtype(series)
     
-    # Validate input parameters
+    # Validate the `include` parameter
     if include is not None:
         if not isinstance(include, list):
             raise ValueError("The `include` parameter must be a list of features.")
         non_existent = [f for f in include if f not in data.columns]
         if non_existent:
             raise ValueError(f"Features not found in data: {non_existent}")
-    
+
+    # Validate the `exclude` parameter
     if exclude is not None:
         if not isinstance(exclude, list):
             raise ValueError("The `exclude` parameter must be a list of features.")
         non_existent = [f for f in exclude if f not in data.columns]
         if non_existent:
             raise ValueError(f"Features not found in data: {non_existent}")
+
+    # Validate the `exclude_binary` parameter
+    if not isinstance(exclude_binary, bool):
+        raise ValueError("The `exclude_binary` parameter must be boolean, True or False.")
 
     # 1. Initial feature selection
     if include:
@@ -80,44 +93,82 @@ def excluded_features(data, include, exclude, exclude_binary):
 
     return features
 
-def data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=False, color='skyblue', kde_color='crimson', kde=False):
+#---------------End of helper functions---------------
+
+
+
+#---------------Main function(s)---------------
+
+#No. 1
+def data_dist(data, bins=30, exclude=None, include=None, exclude_binary=False, color='skyblue', kde_color='crimson', kde=True):
     """
     Plots histograms for all features in a DataFrame in a grid layout.
     The number of rows and columns is determined dynamically.
 
     Parameters:
-        data (pd.DataFrame): The input DataFrame
-        exclude (list): Features to exclude from visualization
-        include (list): Features to specifically include
-        exclude_binary (bool): Whether to exclude binary features (default: False)
-        kde (bool): Whether to show Kernel Density Estimate (default: False)
+        - data (*pd.DataFrame*): The input DataFrame (required).
+        - bins (*int*): Number of bins for histograms (default: `30`).
+        - exclude (*list*): Features to exclude from visualization (default: `None`).
+        - include (*list*): Features to specifically include (default: `None`).
+        - exclude_binary (*bool*): Whether to exclude binary features (default: `False`).
+        - color (*str*): Color of the histogram bars (default: `"skyblue"`).
+        - kde_color (*str*): Color of the Kernel Density Estimate (KDE) curve (default: `"crimson"`).
+        - kde (*bool*): Whether to show the KDE curve over histograms (default: `True`).
     """
     
     validate_data(data)
     features = excluded_features(data, include, exclude, exclude_binary)
-
-    if not features:
-        raise ValueError("No numerical features found after filtering. Adjust `include` and `exclude` parameters.")
     
     # Number of features
     num_features = len(features)
+
+    if num_features == 0:
+        print("No numerical features found after filtering. Nothing to plot.")
+        return
+    elif num_features == 1:
+        sns.histplot(x=data[features[0]], bins=bins, kde=False, color=color, edgecolor='black')
+
+        skewness = data[features[0]].skew()
+        
+        if kde:
+            # Calculate bin edges and bin widths
+            bin_edges = np.histogram_bin_edges(data[features[0]], bins=bins)
+            
+            # Calculate the KDE curve
+            kde_est = gaussian_kde(data[features[0]])
+
+            # Edge case - If the data is identical (max is similar to min) this could cause an error.
+            x_min = data[features[0]].min()
+            x_max = data[features[0]].max()
+            if x_min == x_max:
+                x = np.array([x_min])  # Avoid linspace error
+            else:
+                x = np.linspace(x_min, x_max, 100)
+    
+            kde_curve = kde_est(x) * len(data[features[0]]) * np.diff(bin_edges).mean()  # Scale to match histogram counts
+            
+            # Overlay the KDE curve
+            plt.plot(x, kde_curve, color=kde_color, lw=2, label='KDE')
+        
+        plt.title(f"{features[0]}\nSkewness: {skewness:.2f}")
+        plt.xlabel(features[0])
+        plt.ylabel("Frequency")
+        plt.show()
+        return
     
     # Determine grid layout
     num_cols = int(np.ceil(np.sqrt(num_features)))
     num_rows = int(np.ceil(num_features / num_cols))
 
     # Dynamic figsize based on number of rows and columns
-    base_figsize = 3  # Base size for each subplot
+    base_figsize = 5  # Base size for each subplot
     fig_width = num_cols * base_figsize
     fig_height = num_rows * base_figsize
     
     # Create subplots
     fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(fig_width, fig_height))
 
-    if num_features == 1:
-        axes = [axes]  # Convert single axis to list
-    else:
-        axes = axes.flatten()
+    axes = axes.flatten()  # Flatten 2D array to 1D
     
     # Plot histograms with KDE
     for i, column in enumerate(features):
@@ -125,7 +176,6 @@ def data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=Fal
         
         # Precompute histogram
         counts, edges = np.histogram(data[column], bins=bins)
-        bin_width = edges[1] - edges[0]  # Calculate bin width
         
         # Plot with Matplotlib
         ax.bar(edges[:-1], counts, width=np.diff(edges), 
@@ -133,14 +183,14 @@ def data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=Fal
     
         # Add skewness
         skewness = data[column].skew()
-        ax.set_title(f'{column}\nSkewness: {skewness:.2f}', fontsize=9)
-        ax.tick_params(axis='both', labelsize=6)
+        ax.set_title(f'{column} - Skewness: {skewness:.2f}', fontsize=14)
+        ax.tick_params(axis='both', labelsize=10)
     
         if kde:
             # Calculate proper KDE scaling
             kde_est = gaussian_kde(data[column])
-            x = np.linspace(edges[0], edges[-1], 100)  # Increased points for smoother curve
-            kde_curve = kde_est(x) * (bin_width * len(data[column]))  # Correct scaling
+            x = np.linspace(data[column].min(), data[column].max(), 100) #increase the points to make smooth curve
+            kde_curve = kde_est(x) * len(data[column]) * np.diff(edges).mean()
         
             ax.plot(x, kde_curve, color=kde_color, lw=2)
         
@@ -149,6 +199,6 @@ def data_dist(data=None, bins=30, exclude=None, include=None, exclude_binary=Fal
         fig.delaxes(axes[j])
     
     # Add main title and adjust layout
-    plt.suptitle('Dataset Feature Distributions with Skewness', fontsize=14)
+    plt.suptitle('Dataset Feature Distributions with Skewness\n', fontsize=20)
     plt.tight_layout()
     plt.show()
